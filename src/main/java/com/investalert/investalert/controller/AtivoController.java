@@ -8,8 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
+
 
 @RestController
 @RequestMapping("/api/ativos")
@@ -32,4 +32,6 @@ public class AtivoController {
     public ResponseEntity<AtivoResponseDTO> buscarPorTicker(@PathVariable String ticker) {
         return ResponseEntity.ok(ativoService.buscarPorTicker(ticker));
     }
+
+   
 }
