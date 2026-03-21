@@ -16,5 +16,5 @@ public class CarteiraResponseDTO {
     private String nome;
     private List<CarteiraAtivoResponseDTO> ativos;
     private BigDecimal valorTotal;
-    private BigDecimal lucroprejuizo;
+    private BigDecimal lucroPrejuizo;
 }
