@@ -18,16 +18,16 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: true
-    open-in-view: false  
+    open-in-view: false
     properties:
       hibernate:
         format_sql: true
-        
 
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+    validate-migration-naming: true
 
   mail:
     host: smtp.gmail.com
@@ -40,6 +40,10 @@ spring:
           auth: true
           starttls:
             enable: true
+
+jwt:
+  secret: investalert-secret-key-dev-must-be-at-least-256-bits-long-for-hmac
+  expiration: 86400000
 
 server:
   port: 8080
@@ -65,10 +69,12 @@ spring:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    open-in-view: false
 
   flyway:
     enabled: true
     locations: classpath:db/migration
+    validate-migration-naming: true
 
   mail:
     host: smtp.gmail.com
@@ -81,6 +87,10 @@ spring:
           auth: true
           starttls:
             enable: true
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 server:
   port: ${PORT:8080}
