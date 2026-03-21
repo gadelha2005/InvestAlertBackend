@@ -36,6 +36,7 @@ public class Notificacao {
     @Column(name = "data_envio")
     private LocalDateTime dataEnvio;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean lida = false;
 

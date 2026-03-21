@@ -28,6 +28,7 @@ public class Meta {
     @Column(name = "valor_objetivo", nullable = false, precision = 19, scale = 4)
     private BigDecimal valorObjetivo;
 
+    @Builder.Default
     @Column(name = "valor_atual", precision = 19, scale = 4)
     private BigDecimal valorAtual = BigDecimal.ZERO;
 

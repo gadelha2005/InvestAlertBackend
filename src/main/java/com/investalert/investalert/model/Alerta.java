@@ -34,9 +34,11 @@ public class Alerta {
     @Column(name = "valor_alvo", nullable = false, precision = 19, scale = 4)
     private BigDecimal valorAlvo;
 
+    @Builder.Default
     @Column(name = "notificar_whatsapp")
     private Boolean notificarWhatsapp = false;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean ativado = true;
 
