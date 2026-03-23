@@ -1,5 +1,6 @@
 package com.investalert.investalert.scheduler;
 
+import com.investalert.investalert.integration.EmailService;
 import com.investalert.investalert.model.Alerta;
 import com.investalert.investalert.model.Notificacao;
 import com.investalert.investalert.model.PrecoAtivo;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,8 +27,8 @@ public class AlertaScheduler {
     private final AlertaRepository alertaRepository;
     private final PrecoAtivoRepository precoAtivoRepository;
     private final NotificacaoRepository notificacaoRepository;
+    private final EmailService emailService;
 
-    // Executa após atualização de preços — a cada 5 minutos com 30s de delay
     @Scheduled(fixedRateString = "${scheduler.alerta.intervalo:300000}",
                initialDelayString = "${scheduler.alerta.delay:30000}")
     @Transactional
@@ -58,7 +60,7 @@ public class AlertaScheduler {
         boolean condicaoAtingida = verificarCondicao(alerta, preco);
 
         if (condicaoAtingida) {
-            dispararNotificacao(alerta, preco);
+            dispararNotificacoes(alerta, preco);
         }
     }
 
@@ -71,29 +73,38 @@ public class AlertaScheduler {
     }
 
     private boolean verificarVariacao(Alerta alerta, BigDecimal precoAtual) {
-        // Para variação, o valor_alvo representa o percentual mínimo de variação
-        // Busca o preço de 24h atrás para calcular a variação
-        List<PrecoAtivo> historico = precoAtivoRepository
-                .findTopByAtivoIdOrderByDataHoraDesc(alerta.getAtivo().getId())
-                .map(List::of)
-                .orElse(List.of());
-
-        if (historico.isEmpty()) {
+        if (alerta.getValorAlvo().compareTo(BigDecimal.ZERO) == 0) {
             return false;
         }
 
-        // Simplificado: compara com o valor_alvo como percentual absoluto de variação
-        BigDecimal variacaoAbsoluta = precoAtual.subtract(alerta.getValorAlvo())
+        BigDecimal variacaoPercentual = precoAtual
+                .subtract(alerta.getValorAlvo())
                 .abs()
-                .divide(alerta.getValorAlvo(), 4, java.math.RoundingMode.HALF_UP)
+                .divide(alerta.getValorAlvo(), 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100));
 
-        return variacaoAbsoluta.compareTo(alerta.getValorAlvo()) >= 0;
+        return variacaoPercentual.compareTo(alerta.getValorAlvo()) >= 0;
     }
 
-    private void dispararNotificacao(Alerta alerta, BigDecimal precoAtual) {
+    private void dispararNotificacoes(Alerta alerta, BigDecimal precoAtual) {
         String mensagem = construirMensagem(alerta, precoAtual);
+        String assunto = "InvestAlert — Alerta disparado: " + alerta.getAtivo().getTicker();
 
+        // Notificação interna — sempre
+        salvarNotificacaoInterna(alerta, mensagem);
+
+        // Email — sempre
+        emailService.enviar(
+                alerta.getUsuario().getEmail(),
+                assunto,
+                mensagem
+        );
+
+        log.info("Notificações disparadas para alerta {} — {}: R$ {}",
+                alerta.getId(), alerta.getAtivo().getTicker(), precoAtual);
+    }
+
+    private void salvarNotificacaoInterna(Alerta alerta, String mensagem) {
         Notificacao notificacao = Notificacao.builder()
                 .usuario(alerta.getUsuario())
                 .alerta(alerta)
@@ -102,19 +113,24 @@ public class AlertaScheduler {
                 .build();
 
         notificacaoRepository.save(notificacao);
-
-        log.info("Notificação criada para alerta {} — {}: R$ {}",
-                alerta.getId(), alerta.getAtivo().getTicker(), precoAtual);
+        log.debug("Notificação interna salva para alerta {}", alerta.getId());
     }
 
     private String construirMensagem(Alerta alerta, BigDecimal precoAtual) {
         String ticker = alerta.getAtivo().getTicker();
-        String tipo = switch (alerta.getTipo()) {
+        String condicao = switch (alerta.getTipo()) {
             case PRECO_ACIMA -> "atingiu o preço máximo de R$ " + alerta.getValorAlvo();
             case PRECO_ABAIXO -> "atingiu o preço mínimo de R$ " + alerta.getValorAlvo();
             case VARIACAO -> "teve variação de " + alerta.getValorAlvo() + "%";
         };
 
-        return String.format("⚠️ Alerta: %s %s. Preço atual: R$ %s", ticker, tipo, precoAtual);
+        return String.format(
+                "Alerta InvestAlert\n\n" +
+                "Ativo: %s\n" +
+                "Condição: %s\n" +
+                "Preço atual: R$ %s\n\n" +
+                "Acesse sua carteira para mais detalhes.",
+                ticker, condicao, precoAtual
+        );
     }
 }

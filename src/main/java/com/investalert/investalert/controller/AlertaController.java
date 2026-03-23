@@ -59,6 +59,7 @@ public class AlertaController {
         return ResponseEntity.ok(alertaService.alterarStatus(id, usuarioId, ativado));
     }
 
+    
     private Long getUsuarioId(UserDetails userDetails) {
         return usuarioService.buscarEntidadePorEmail(userDetails.getUsername()).getId();
     }
