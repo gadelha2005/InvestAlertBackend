@@ -51,6 +51,13 @@ integration:
   coingecko:
     base-url: https://api.coingecko.com/api/v3
 
+scheduler:
+  preco:
+    intervalo: 300000
+  alerta:
+    intervalo: 300000
+    delay: 30000
+
 server:
   port: 8080
 
@@ -103,6 +110,13 @@ integration:
     base-url: https://brapi.dev/api
   coingecko:
     base-url: https://api.coingecko.com/api/v3
+
+scheduler:
+  preco:
+    intervalo: 300000
+  alerta:
+    intervalo: 300000
+    delay: 30000
 
 server:
   port: ${PORT:8080}
