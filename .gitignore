@@ -1,10 +1,29 @@
-HELP.md
+############################################
+# BUILD
+############################################
 target/
-.mvn/wrapper/maven-wrapper.jar
+build/
 !**/src/main/**/target/
 !**/src/test/**/target/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-### STS ###
+############################################
+# MAVEN / WRAPPER
+############################################
+.mvn/wrapper/maven-wrapper.jar
+
+############################################
+# IDEs
+############################################
+
+## IntelliJ
+.idea/
+*.iws
+*.iml
+*.ipr
+
+## Eclipse / STS
 .apt_generated
 .classpath
 .factorypath
@@ -13,45 +32,70 @@ target/
 .springBeans
 .sts4-cache
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
+## NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
+## VS Code
 .vscode/
 
-### Arquivos sensíveis ###
-application-prod.yml
-application-secrets.yml
-.env
-*.env
-secrets/
+############################################
+# SISTEMA OPERACIONAL
+############################################
+.DS_Store
+Thumbs.db
 
-### Docker ###
-docker-compose.override.yml
+############################################
+# LOGS
+############################################
+logs/
+*.log
 
-### Banco de dados ###
+############################################
+# BANCO DE DADOS / DUMPS
+############################################
 *.sql.bak
 *.dump
+*.bak
 data/
 db-data/
 
-### Logs ###
-*.log
-logs/
+############################################
+# DOCKER
+############################################
+docker-compose.override.yml
+.env.docker
 
-### Sistema operacional ###
-.DS_Store
-Thumbs.db
+############################################
+# VARIÁVEIS DE AMBIENTE
+############################################
+.env
+*.env
+
+############################################
+# SPRING BOOT - CONFIGS SENSÍVEIS
+############################################
+
+# Ignora TODOS os arquivos de configuração reais
+application.yml
+application-*.yml
+
+# Permite versionar apenas o exemplo
+!application-example.yml
+
+############################################
+# SEGREDOS
+############################################
+secrets/
+*.key
+*.pem
+*.p12
+*.jks
+
+############################################
+# OUTROS
+############################################
+HELP.md
