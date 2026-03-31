@@ -7,6 +7,7 @@ import com.investalert.investalert.dto.response.CarteiraResponseDTO;
 import com.investalert.investalert.exception.BusinessException;
 import com.investalert.investalert.exception.ResourceNotFoundException;
 import com.investalert.investalert.exception.UnauthorizedException;
+import com.investalert.investalert.integration.PrecoService;
 import com.investalert.investalert.model.Ativo;
 import com.investalert.investalert.model.Carteira;
 import com.investalert.investalert.model.CarteiraAtivo;
@@ -32,6 +33,7 @@ public class CarteiraService {
     private final PrecoAtivoRepository precoAtivoRepository;
     private final AtivoService ativoService;
     private final UsuarioService usuarioService;
+    private final PrecoService precoService;
 
     @Transactional
     public CarteiraResponseDTO criar(Long usuarioId, CarteiraRequestDTO dto) {
@@ -75,6 +77,13 @@ public class CarteiraService {
         Carteira carteira = carteiraRepository.findByIdAndUsuarioId(carteiraId, usuarioId)
                 .orElseThrow(() -> new UnauthorizedException("Carteira não encontrada ou sem permissão"));
 
+        // Validar que pelo menos quantidade ou valor foi informado
+        if ((dto.getQuantidade() == null || dto.getQuantidade().signum() <= 0) &&
+            (dto.getValor() == null || dto.getValor().signum() <= 0) &&
+            (dto.getPrecoMedio() == null || dto.getPrecoMedio().signum() <= 0)) {
+            throw new BusinessException("Informe quantidade, valor ou preço médio");
+        }
+
         Ativo ativo = ativoService.buscarEntidadePorTicker(dto.getTicker());
 
         carteiraAtivoRepository.findByCarteiraIdAndAtivoId(carteiraId, ativo.getId())
@@ -82,11 +91,52 @@ public class CarteiraService {
                     throw new BusinessException("Ativo " + dto.getTicker() + " já existe na carteira");
                 });
 
+        // Se precoMedio foi informado manualmente, usar as informações como estão
+        if (dto.getPrecoMedio() != null && dto.getPrecoMedio().signum() > 0 && 
+            dto.getQuantidade() != null && dto.getQuantidade().signum() > 0) {
+            
+            CarteiraAtivo carteiraAtivo = CarteiraAtivo.builder()
+                    .carteira(carteira)
+                    .ativo(ativo)
+                    .quantidade(dto.getQuantidade())
+                    .precoMedio(dto.getPrecoMedio())
+                    .build();
+
+            CarteiraAtivo salvo = carteiraAtivoRepository.save(carteiraAtivo);
+            BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
+
+            return toAtivoResponse(salvo, precoAtual);
+        }
+
+        // Buscar preço atual usando o provider correto (Brapi para ações, CoinGecko para cripto)
+        BigDecimal precoAtualBuscado = precoService.atualizarPreco(ativo)
+                .orElseThrow(() -> new BusinessException(
+                        "Não foi possível obter o preço para o ativo " + dto.getTicker() + 
+                        ". Verifique se o ticker está correto ou se o sistema de preços está disponível"));
+
+        BigDecimal quantidade;
+        BigDecimal precoMedio;
+
+        // Cenário 1: Usuário informou quantidade
+        if (dto.getQuantidade() != null && dto.getQuantidade().signum() > 0) {
+            quantidade = dto.getQuantidade();
+            precoMedio = precoAtualBuscado;
+        }
+        // Cenário 2: Usuário informou valor
+        else if (dto.getValor() != null && dto.getValor().signum() > 0) {
+            quantidade = dto.getValor()
+                    .divide(precoAtualBuscado, 8, RoundingMode.HALF_UP);
+            precoMedio = precoAtualBuscado;
+        }
+        else {
+            throw new BusinessException("Informe quantidade ou valor para o ativo");
+        }
+
         CarteiraAtivo carteiraAtivo = CarteiraAtivo.builder()
                 .carteira(carteira)
                 .ativo(ativo)
-                .quantidade(dto.getQuantidade())
-                .precoMedio(dto.getPrecoMedio())
+                .quantidade(quantidade)
+                .precoMedio(precoMedio)
                 .build();
 
         CarteiraAtivo salvo = carteiraAtivoRepository.save(carteiraAtivo);
