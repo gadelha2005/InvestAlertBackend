@@ -42,6 +42,10 @@ public class Alerta {
     @Column(nullable = false)
     private Boolean ativado = true;
 
+    @Builder.Default
+    @Column(name = "condicao_disparada", nullable = false)
+    private Boolean condicaoDisparada = false;
+
     @Column(name = "data_criacao")
     private LocalDateTime dataCriacao;
 

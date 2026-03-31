@@ -77,6 +77,9 @@ public class AlertaService {
         }
 
         alerta.setAtivado(ativado);
+        if (Boolean.FALSE.equals(ativado)) {
+            alerta.setCondicaoDisparada(false);
+        }
         BigDecimal precoAtual = buscarPrecoAtual(alerta.getAtivo().getId());
 
         return toResponse(alertaRepository.save(alerta), precoAtual);

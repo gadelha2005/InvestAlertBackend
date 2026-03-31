@@ -56,6 +56,11 @@ public class NotificacaoService {
         notificacaoRepository.saveAll(naoLidas);
     }
 
+    @Transactional
+    public void deletarTodas(Long usuarioId) {
+        notificacaoRepository.deleteByUsuarioId(usuarioId);
+    }
+
     private NotificacaoResponseDTO toResponse(Notificacao notificacao) {
         return NotificacaoResponseDTO.builder()
                 .id(notificacao.getId())

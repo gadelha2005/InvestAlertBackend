@@ -61,6 +61,15 @@ public class NotificacaoController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping
+    public ResponseEntity<Void> deletarTodas(
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        Long usuarioId = getUsuarioId(userDetails);
+        notificacaoService.deletarTodas(usuarioId);
+        return ResponseEntity.noContent().build();
+    }
+
     private Long getUsuarioId(UserDetails userDetails) {
         return usuarioService.buscarEntidadePorEmail(userDetails.getUsername()).getId();
     }

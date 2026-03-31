@@ -59,8 +59,11 @@ public class AlertaScheduler {
         BigDecimal preco = precoAtual.get().getPreco();
         boolean condicaoAtingida = verificarCondicao(alerta, preco);
 
-        if (condicaoAtingida) {
+        if (condicaoAtingida && !Boolean.TRUE.equals(alerta.getCondicaoDisparada())) {
             dispararNotificacoes(alerta, preco);
+            alerta.setCondicaoDisparada(true);
+        } else if (!condicaoAtingida && Boolean.TRUE.equals(alerta.getCondicaoDisparada())) {
+            alerta.setCondicaoDisparada(false);
         }
     }
 
