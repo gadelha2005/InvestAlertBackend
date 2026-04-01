@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -73,82 +74,73 @@ public class CarteiraService {
 
     @Transactional
     public CarteiraAtivoResponseDTO adicionarAtivo(Long carteiraId, Long usuarioId,
-                                                    CarteiraAtivoRequestDTO dto) {
+                                                   CarteiraAtivoRequestDTO dto) {
         Carteira carteira = carteiraRepository.findByIdAndUsuarioId(carteiraId, usuarioId)
-                .orElseThrow(() -> new UnauthorizedException("Carteira não encontrada ou sem permissão"));
+                .orElseThrow(() -> new UnauthorizedException("Carteira nao encontrada ou sem permissao"));
 
-        // Validar que pelo menos quantidade ou valor foi informado
         if ((dto.getQuantidade() == null || dto.getQuantidade().signum() <= 0) &&
-            (dto.getValor() == null || dto.getValor().signum() <= 0) &&
-            (dto.getPrecoMedio() == null || dto.getPrecoMedio().signum() <= 0)) {
-            throw new BusinessException("Informe quantidade, valor ou preço médio");
+                (dto.getValor() == null || dto.getValor().signum() <= 0) &&
+                (dto.getPrecoMedio() == null || dto.getPrecoMedio().signum() <= 0)) {
+            throw new BusinessException("Informe quantidade, valor ou preco medio");
         }
 
         Ativo ativo = ativoService.buscarEntidadePorTicker(dto.getTicker());
+        Optional<CarteiraAtivo> carteiraAtivoExistente = carteiraAtivoRepository
+                .findByCarteiraIdAndAtivoId(carteiraId, ativo.getId());
 
-        carteiraAtivoRepository.findByCarteiraIdAndAtivoId(carteiraId, ativo.getId())
-                .ifPresent(ca -> {
-                    throw new BusinessException("Ativo " + dto.getTicker() + " já existe na carteira");
-                });
+        if (dto.getPrecoMedio() != null && dto.getPrecoMedio().signum() > 0
+                && dto.getQuantidade() != null && dto.getQuantidade().signum() > 0) {
 
-        // Se precoMedio foi informado manualmente, usar as informações como estão
-        if (dto.getPrecoMedio() != null && dto.getPrecoMedio().signum() > 0 && 
-            dto.getQuantidade() != null && dto.getQuantidade().signum() > 0) {
-            
-            CarteiraAtivo carteiraAtivo = CarteiraAtivo.builder()
-                    .carteira(carteira)
-                    .ativo(ativo)
-                    .quantidade(dto.getQuantidade())
-                    .precoMedio(dto.getPrecoMedio())
-                    .build();
+            CarteiraAtivo salvo = salvarOuAtualizarPosicao(
+                    carteira,
+                    ativo,
+                    carteiraAtivoExistente,
+                    dto.getQuantidade(),
+                    dto.getPrecoMedio()
+            );
 
-            CarteiraAtivo salvo = carteiraAtivoRepository.save(carteiraAtivo);
-            BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
-
-            return toAtivoResponse(salvo, precoAtual);
+            return toAtivoResponse(salvo, buscarPrecoAtual(ativo.getId()));
         }
 
-        // Buscar preço atual usando o provider correto (Brapi para ações, CoinGecko para cripto)
         BigDecimal precoAtualBuscado = precoService.atualizarPreco(ativo)
-                .orElseThrow(() -> new BusinessException(
-                        "Não foi possível obter o preço para o ativo " + dto.getTicker() + 
-                        ". Verifique se o ticker está correto ou se o sistema de preços está disponível"));
+                .orElseGet(() -> buscarPrecoAtual(ativo.getId()));
+
+        if (precoAtualBuscado == null) {
+            throw new BusinessException(
+                    "Nao foi possivel obter o preco atual para o ativo " + dto.getTicker()
+                            + ". Adicione-o pelo modo manual informando quantidade e preco medio."
+            );
+        }
 
         BigDecimal quantidade;
         BigDecimal precoMedio;
 
-        // Cenário 1: Usuário informou quantidade
         if (dto.getQuantidade() != null && dto.getQuantidade().signum() > 0) {
             quantidade = dto.getQuantidade();
             precoMedio = precoAtualBuscado;
-        }
-        // Cenário 2: Usuário informou valor
-        else if (dto.getValor() != null && dto.getValor().signum() > 0) {
+        } else if (dto.getValor() != null && dto.getValor().signum() > 0) {
             quantidade = dto.getValor()
                     .divide(precoAtualBuscado, 8, RoundingMode.HALF_UP);
             precoMedio = precoAtualBuscado;
-        }
-        else {
+        } else {
             throw new BusinessException("Informe quantidade ou valor para o ativo");
         }
 
-        CarteiraAtivo carteiraAtivo = CarteiraAtivo.builder()
-                .carteira(carteira)
-                .ativo(ativo)
-                .quantidade(quantidade)
-                .precoMedio(precoMedio)
-                .build();
+        CarteiraAtivo salvo = salvarOuAtualizarPosicao(
+                carteira,
+                ativo,
+                carteiraAtivoExistente,
+                quantidade,
+                precoMedio
+        );
 
-        CarteiraAtivo salvo = carteiraAtivoRepository.save(carteiraAtivo);
-        BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
-
-        return toAtivoResponse(salvo, precoAtual);
+        return toAtivoResponse(salvo, buscarPrecoAtual(ativo.getId()));
     }
 
     @Transactional
     public void removerAtivo(Long carteiraId, Long carteiraAtivoId, Long usuarioId) {
         carteiraRepository.findByIdAndUsuarioId(carteiraId, usuarioId)
-                .orElseThrow(() -> new UnauthorizedException("Carteira não encontrada ou sem permissão"));
+                .orElseThrow(() -> new UnauthorizedException("Carteira nao encontrada ou sem permissao"));
 
         CarteiraAtivo carteiraAtivo = carteiraAtivoRepository.findById(carteiraAtivoId)
                 .orElseThrow(() -> new ResourceNotFoundException("CarteiraAtivo", carteiraAtivoId));
@@ -160,6 +152,38 @@ public class CarteiraService {
         return precoAtivoRepository.findTopByAtivoIdOrderByDataHoraDesc(ativoId)
                 .map(PrecoAtivo::getPreco)
                 .orElse(null);
+    }
+
+    private CarteiraAtivo salvarOuAtualizarPosicao(Carteira carteira,
+                                                   Ativo ativo,
+                                                   Optional<CarteiraAtivo> carteiraAtivoExistente,
+                                                   BigDecimal quantidadeAdicional,
+                                                   BigDecimal precoMedioAdicional) {
+        if (carteiraAtivoExistente.isEmpty()) {
+            CarteiraAtivo carteiraAtivo = CarteiraAtivo.builder()
+                    .carteira(carteira)
+                    .ativo(ativo)
+                    .quantidade(quantidadeAdicional)
+                    .precoMedio(precoMedioAdicional)
+                    .build();
+
+            return carteiraAtivoRepository.save(carteiraAtivo);
+        }
+
+        CarteiraAtivo carteiraAtivo = carteiraAtivoExistente.get();
+        BigDecimal quantidadeAtual = carteiraAtivo.getQuantidade();
+        BigDecimal quantidadeTotal = quantidadeAtual.add(quantidadeAdicional);
+
+        BigDecimal valorInvestidoAtual = carteiraAtivo.getPrecoMedio().multiply(quantidadeAtual);
+        BigDecimal valorInvestidoAdicional = precoMedioAdicional.multiply(quantidadeAdicional);
+        BigDecimal precoMedioPonderado = valorInvestidoAtual
+                .add(valorInvestidoAdicional)
+                .divide(quantidadeTotal, 4, RoundingMode.HALF_UP);
+
+        carteiraAtivo.setQuantidade(quantidadeTotal);
+        carteiraAtivo.setPrecoMedio(precoMedioPonderado);
+
+        return carteiraAtivoRepository.save(carteiraAtivo);
     }
 
     private CarteiraResponseDTO toResponse(Carteira carteira, List<CarteiraAtivo> itens) {

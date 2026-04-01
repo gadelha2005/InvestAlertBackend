@@ -1,5 +1,6 @@
 package com.investalert.investalert.dto.request;
 
+import com.investalert.investalert.model.enums.TipoAcompanhamentoMeta;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -21,6 +22,10 @@ public class MetaRequestDTO {
     @NotNull(message = "Valor objetivo é obrigatório")
     @DecimalMin(value = "0.01", message = "Valor objetivo deve ser maior que zero")
     private BigDecimal valorObjetivo;
+
+    private TipoAcompanhamentoMeta tipoAcompanhamento;
+
+    private Long carteiraId;
 
     private LocalDateTime dataLimite;
 }

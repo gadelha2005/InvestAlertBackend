@@ -4,6 +4,7 @@ import com.investalert.investalert.dto.request.AtivoRequestDTO;
 import com.investalert.investalert.dto.response.AtivoResponseDTO;
 import com.investalert.investalert.exception.BusinessException;
 import com.investalert.investalert.exception.ResourceNotFoundException;
+import com.investalert.investalert.integration.PrecoService;
 import com.investalert.investalert.model.Ativo;
 import com.investalert.investalert.model.PrecoAtivo;
 import com.investalert.investalert.repository.AtivoRepository;
@@ -21,6 +22,7 @@ public class AtivoService {
 
     private final AtivoRepository ativoRepository;
     private final PrecoAtivoRepository precoAtivoRepository;
+    private final PrecoService precoService;
 
     @Transactional
     public AtivoResponseDTO cadastrar(AtivoRequestDTO dto) {
@@ -43,14 +45,14 @@ public class AtivoService {
         Ativo ativo = ativoRepository.findByTicker(ticker.toUpperCase())
                 .orElseThrow(() -> new ResourceNotFoundException("Ativo", "ticker", ticker));
 
-        BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
+        BigDecimal precoAtual = buscarPrecoAtualOuAtualizar(ativo);
         return toResponse(ativo, precoAtual);
     }
 
     @Transactional(readOnly = true)
     public List<AtivoResponseDTO> listarTodos() {
         return ativoRepository.findAll().stream()
-                .map(ativo -> toResponse(ativo, buscarPrecoAtual(ativo.getId())))
+                .map(ativo -> toResponse(ativo, buscarPrecoAtualOuAtualizar(ativo)))
                 .toList();
     }
 
@@ -64,6 +66,15 @@ public class AtivoService {
         return precoAtivoRepository.findTopByAtivoIdOrderByDataHoraDesc(ativoId)
                 .map(PrecoAtivo::getPreco)
                 .orElse(null);
+    }
+
+    private BigDecimal buscarPrecoAtualOuAtualizar(Ativo ativo) {
+        BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
+        if (precoAtual != null) {
+            return precoAtual;
+        }
+
+        return precoService.atualizarPreco(ativo).orElse(null);
     }
 
     private AtivoResponseDTO toResponse(Ativo ativo, BigDecimal precoAtual) {

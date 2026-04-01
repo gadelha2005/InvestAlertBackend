@@ -2,10 +2,12 @@ package com.investalert.investalert.service;
 
 import com.investalert.investalert.dto.request.MetaRequestDTO;
 import com.investalert.investalert.dto.response.MetaResponseDTO;
+import com.investalert.investalert.exception.BusinessException;
 import com.investalert.investalert.exception.ResourceNotFoundException;
 import com.investalert.investalert.exception.UnauthorizedException;
 import com.investalert.investalert.model.Meta;
 import com.investalert.investalert.model.Usuario;
+import com.investalert.investalert.model.enums.TipoAcompanhamentoMeta;
 import com.investalert.investalert.repository.MetaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,6 +22,7 @@ import java.util.List;
 public class MetaService {
 
     private final MetaRepository metaRepository;
+    private final CarteiraService carteiraService;
     private final UsuarioService usuarioService;
 
     @Transactional
@@ -32,6 +35,8 @@ public class MetaService {
                 .usuario(usuario)
                 .nome(dto.getNome())
                 .valorObjetivo(dto.getValorObjetivo())
+                .tipoAcompanhamento(resolveTipoAcompanhamento(dto))
+                .carteiraId(resolveCarteiraId(dto, usuarioId))
                 .dataLimite(dto.getDataLimite())
                 .build();
 
@@ -56,6 +61,8 @@ public class MetaService {
 
         meta.setNome(dto.getNome());
         meta.setValorObjetivo(dto.getValorObjetivo());
+        meta.setTipoAcompanhamento(resolveTipoAcompanhamento(dto));
+        meta.setCarteiraId(resolveCarteiraId(dto, usuarioId));
         meta.setDataLimite(dto.getDataLimite());
 
         return toResponse(metaRepository.save(meta));
@@ -74,10 +81,11 @@ public class MetaService {
     }
 
     private MetaResponseDTO toResponse(Meta meta) {
+        BigDecimal valorAtual = resolveValorAtual(meta);
         BigDecimal percentual = null;
 
         if (meta.getValorObjetivo().compareTo(BigDecimal.ZERO) != 0) {
-            percentual = meta.getValorAtual()
+            percentual = valorAtual
                     .divide(meta.getValorObjetivo(), 4, RoundingMode.HALF_UP)
                     .multiply(BigDecimal.valueOf(100));
         }
@@ -86,10 +94,55 @@ public class MetaService {
                 .id(meta.getId())
                 .nome(meta.getNome())
                 .valorObjetivo(meta.getValorObjetivo())
-                .valorAtual(meta.getValorAtual())
+                .valorAtual(valorAtual)
+                .tipoAcompanhamento(meta.getTipoAcompanhamento())
+                .carteiraId(meta.getCarteiraId())
                 .percentualConcluido(percentual)
                 .dataCriacao(meta.getDataCriacao())
                 .dataLimite(meta.getDataLimite())
                 .build();
+    }
+
+    private TipoAcompanhamentoMeta resolveTipoAcompanhamento(MetaRequestDTO dto) {
+        TipoAcompanhamentoMeta tipo = dto.getTipoAcompanhamento() == null
+                ? TipoAcompanhamentoMeta.MANUAL
+                : dto.getTipoAcompanhamento();
+
+        if (tipo == TipoAcompanhamentoMeta.MANUAL && dto.getCarteiraId() != null) {
+            throw new BusinessException("Carteira vinculada so pode ser informada para metas do tipo CARTEIRA_VINCULADA");
+        }
+
+        if (tipo == TipoAcompanhamentoMeta.CARTEIRA_VINCULADA && dto.getCarteiraId() == null) {
+            throw new BusinessException("Carteira vinculada e obrigatoria quando o tipo de acompanhamento for CARTEIRA_VINCULADA");
+        }
+
+        return tipo;
+    }
+
+    private Long resolveCarteiraId(MetaRequestDTO dto, Long usuarioId) {
+        if (resolveTipoAcompanhamento(dto) != TipoAcompanhamentoMeta.CARTEIRA_VINCULADA) {
+            return null;
+        }
+
+        return carteiraService.buscarPorId(dto.getCarteiraId(), usuarioId).getId();
+    }
+
+    private BigDecimal resolveValorAtual(Meta meta) {
+        if (meta.getTipoAcompanhamento() != TipoAcompanhamentoMeta.CARTEIRA_VINCULADA) {
+            return meta.getValorAtual() == null ? BigDecimal.ZERO : meta.getValorAtual();
+        }
+
+        if (meta.getCarteiraId() == null) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal valorTotal = carteiraService
+                .buscarPorId(meta.getCarteiraId(), meta.getUsuario().getId())
+                .getValorTotal();
+
+        BigDecimal valorAtual = valorTotal == null ? BigDecimal.ZERO : valorTotal;
+        meta.setValorAtual(valorAtual);
+        metaRepository.save(meta);
+        return valorAtual;
     }
 }

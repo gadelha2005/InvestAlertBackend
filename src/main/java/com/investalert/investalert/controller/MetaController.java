@@ -1,7 +1,10 @@
 package com.investalert.investalert.controller;
 
+import com.investalert.investalert.dto.request.MetaMovimentacaoRequestDTO;
 import com.investalert.investalert.dto.request.MetaRequestDTO;
+import com.investalert.investalert.dto.response.MetaMovimentacaoResponseDTO;
 import com.investalert.investalert.dto.response.MetaResponseDTO;
+import com.investalert.investalert.service.MetaMovimentacaoService;
 import com.investalert.investalert.service.MetaService;
 import com.investalert.investalert.service.UsuarioService;
 import jakarta.validation.Valid;
@@ -20,6 +23,7 @@ import java.util.List;
 public class MetaController {
 
     private final MetaService metaService;
+    private final MetaMovimentacaoService metaMovimentacaoService;
     private final UsuarioService usuarioService;
 
     @PostMapping
@@ -56,6 +60,37 @@ public class MetaController {
 
         Long usuarioId = getUsuarioId(userDetails);
         metaService.deletar(id, usuarioId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/movimentacoes")
+    public ResponseEntity<MetaMovimentacaoResponseDTO> criarMovimentacao(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id,
+            @RequestBody @Valid MetaMovimentacaoRequestDTO dto) {
+
+        Long usuarioId = getUsuarioId(userDetails);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(metaMovimentacaoService.criar(id, usuarioId, dto));
+    }
+
+    @GetMapping("/{id}/movimentacoes")
+    public ResponseEntity<List<MetaMovimentacaoResponseDTO>> listarMovimentacoes(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id) {
+
+        Long usuarioId = getUsuarioId(userDetails);
+        return ResponseEntity.ok(metaMovimentacaoService.listarPorMeta(id, usuarioId));
+    }
+
+    @DeleteMapping("/{metaId}/movimentacoes/{movimentacaoId}")
+    public ResponseEntity<Void> deletarMovimentacao(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long metaId,
+            @PathVariable Long movimentacaoId) {
+
+        Long usuarioId = getUsuarioId(userDetails);
+        metaMovimentacaoService.deletar(metaId, movimentacaoId, usuarioId);
         return ResponseEntity.noContent().build();
     }
 
