@@ -26,18 +26,27 @@ public class AtivoService {
 
     @Transactional
     public AtivoResponseDTO cadastrar(AtivoRequestDTO dto) {
-        if (ativoRepository.existsByTicker(dto.getTicker().toUpperCase())) {
-            throw new BusinessException("Ativo já cadastrado com ticker: " + dto.getTicker());
+        String tickerNormalizado = dto.getTicker().toUpperCase();
+
+        if (ativoRepository.existsByTicker(tickerNormalizado)) {
+            throw new BusinessException("Ativo ja cadastrado com ticker: " + dto.getTicker());
         }
 
         Ativo ativo = Ativo.builder()
-                .ticker(dto.getTicker().toUpperCase())
+                .ticker(tickerNormalizado)
                 .nome(dto.getNome())
                 .tipo(dto.getTipo())
                 .mercado(dto.getMercado())
                 .build();
 
-        return toResponse(ativoRepository.save(ativo), null);
+        Ativo ativoSalvo = ativoRepository.save(ativo);
+        BigDecimal precoAtual = precoService.atualizarPreco(ativoSalvo)
+                .orElseThrow(() -> new BusinessException(
+                        "Nao foi possivel obter o preco atual para o ativo " + tickerNormalizado
+                                + ". Verifique se o ticker esta correto e disponivel na fonte de cotacao."
+                ));
+
+        return toResponse(ativoSalvo, precoAtual);
     }
 
     @Transactional(readOnly = true)

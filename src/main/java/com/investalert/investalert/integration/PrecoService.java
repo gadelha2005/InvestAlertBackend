@@ -58,7 +58,7 @@ public class PrecoService {
         if (ativo.getTipo() == TipoAtivo.CRIPTOMOEDA) {
             return coinGeckoClient.buscarPreco(ativo.getTicker());
         }
-        return brapiClient.buscarPreco(ativo.getTicker());
+        return brapiClient.buscarPreco(ativo.getTicker(), ativo.getMercado());
     }
 
     private void salvarPreco(Ativo ativo, BigDecimal preco) {
