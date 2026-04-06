@@ -2,12 +2,14 @@ package com.investalert.investalert.service;
 
 import com.investalert.investalert.dto.request.AlertaRequestDTO;
 import com.investalert.investalert.dto.response.AlertaResponseDTO;
+import com.investalert.investalert.exception.BusinessException;
 import com.investalert.investalert.exception.ResourceNotFoundException;
 import com.investalert.investalert.exception.UnauthorizedException;
 import com.investalert.investalert.model.Alerta;
 import com.investalert.investalert.model.Ativo;
 import com.investalert.investalert.model.PrecoAtivo;
 import com.investalert.investalert.model.Usuario;
+import com.investalert.investalert.model.enums.TipoAlerta;
 import com.investalert.investalert.repository.AlertaRepository;
 import com.investalert.investalert.repository.PrecoAtivoRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,9 @@ public class AlertaService {
         );
 
         Ativo ativo = ativoService.buscarEntidadePorTicker(dto.getTicker());
+        BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
+
+        validarValorAlvo(dto, ativo, precoAtual);
 
         Alerta alerta = Alerta.builder()
                 .usuario(usuario)
@@ -43,7 +48,6 @@ public class AlertaService {
                 .build();
 
         Alerta salvo = alertaRepository.save(alerta);
-        BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
 
         return toResponse(salvo, precoAtual);
     }
@@ -89,6 +93,27 @@ public class AlertaService {
         return precoAtivoRepository.findTopByAtivoIdOrderByDataHoraDesc(ativoId)
                 .map(PrecoAtivo::getPreco)
                 .orElse(null);
+    }
+
+    private void validarValorAlvo(AlertaRequestDTO dto, Ativo ativo, BigDecimal precoAtual) {
+        if (dto.getTipo() != TipoAlerta.PRECO_ACIMA && dto.getTipo() != TipoAlerta.PRECO_ABAIXO) {
+            return;
+        }
+
+        if (precoAtual == null) {
+            throw new BusinessException("Nao foi possivel validar o alerta porque o ativo "
+                    + ativo.getTicker() + " ainda nao possui preco atual.");
+        }
+
+        if (dto.getTipo() == TipoAlerta.PRECO_ACIMA && dto.getValorAlvo().compareTo(precoAtual) < 0) {
+            throw new BusinessException("Para alerta de preco maximo, o valor alvo deve ser maior ou igual ao preco atual de "
+                    + precoAtual + ".");
+        }
+
+        if (dto.getTipo() == TipoAlerta.PRECO_ABAIXO && dto.getValorAlvo().compareTo(precoAtual) > 0) {
+            throw new BusinessException("Para alerta de preco minimo, o valor alvo deve ser menor ou igual ao preco atual de "
+                    + precoAtual + ".");
+        }
     }
 
     private AlertaResponseDTO toResponse(Alerta alerta, BigDecimal precoAtual) {
