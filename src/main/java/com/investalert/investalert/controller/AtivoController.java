@@ -32,6 +32,4 @@ public class AtivoController {
     public ResponseEntity<AtivoResponseDTO> buscarPorTicker(@PathVariable String ticker) {
         return ResponseEntity.ok(ativoService.buscarPorTicker(ticker));
     }
-
-   
 }

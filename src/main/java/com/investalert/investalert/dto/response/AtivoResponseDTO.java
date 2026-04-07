@@ -18,4 +18,7 @@ public class AtivoResponseDTO {
     private TipoAtivo tipo;
     private String mercado;
     private BigDecimal precoAtual;
+    private BigDecimal variacao;
+    private BigDecimal variacaoPercentual;
+    private Long volume;
 }

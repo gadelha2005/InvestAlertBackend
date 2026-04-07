@@ -51,6 +51,29 @@ public class BrapiClient {
         return Optional.empty();
     }
 
+    public Optional<QuoteSnapshot> buscarResumoMercado(String ticker, String mercado) {
+        for (String tickerConsulta : montarTickersConsulta(ticker, mercado)) {
+            Optional<BrapiResponseDTO.Result> resultado = buscarPrimeiroResultado(tickerConsulta);
+            if (resultado.isPresent()) {
+                BrapiResponseDTO.Result item = resultado.get();
+                BigDecimal preco = item.getRegularMarketPrice() != null
+                        ? BigDecimal.valueOf(item.getRegularMarketPrice())
+                        : null;
+                BigDecimal variacaoPercentual = item.getRegularMarketChangePercent() != null
+                        ? BigDecimal.valueOf(item.getRegularMarketChangePercent())
+                        : null;
+
+                return Optional.of(new QuoteSnapshot(
+                        preco,
+                        variacaoPercentual,
+                        item.getRegularMarketVolume()
+                ));
+            }
+        }
+
+        return Optional.empty();
+    }
+
     private Optional<BigDecimal> buscarPrecoPorTicker(String ticker) {
         Optional<BrapiResponseDTO.Result> resultado = buscarPrimeiroResultado(ticker);
         if (resultado.isEmpty()) {
@@ -174,5 +197,12 @@ public class BrapiClient {
                 || mercadoNormalizado.equals("BR")
                 || mercadoNormalizado.equals("BRASIL")
                 || mercadoNormalizado.equals("BRAZIL");
+    }
+
+    public record QuoteSnapshot(
+            BigDecimal precoAtual,
+            BigDecimal variacaoPercentual,
+            Long volume
+    ) {
     }
 }

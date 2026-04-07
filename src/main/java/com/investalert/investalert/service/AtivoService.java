@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
 
@@ -61,7 +62,7 @@ public class AtivoService {
                                 + ". Verifique se o ticker esta correto e disponivel na fonte de cotacao."
                 ));
 
-        return toResponse(ativoSalvo, precoAtual);
+        return toResponse(ativoSalvo, precoAtual, true);
     }
 
     @Transactional(readOnly = true)
@@ -70,13 +71,20 @@ public class AtivoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Ativo", "ticker", ticker));
 
         BigDecimal precoAtual = buscarPrecoAtualOuAtualizar(ativo);
-        return toResponse(ativo, precoAtual);
+        return toResponse(ativo, precoAtual, true);
     }
 
     @Transactional(readOnly = true)
     public List<AtivoResponseDTO> listarTodos() {
         return ativoRepository.findAll().stream()
-                .map(ativo -> toResponse(ativo, buscarPrecoAtualOuAtualizar(ativo)))
+                .map(ativo -> toResponse(ativo, buscarPrecoAtual(ativo.getId()), false))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AtivoResponseDTO> listarParaScanner() {
+        return ativoRepository.findAll().stream()
+                .map(ativo -> toResponse(ativo, buscarPrecoAtualOuAtualizar(ativo), true))
                 .toList();
     }
 
@@ -91,20 +99,21 @@ public class AtivoService {
         String exchange = normalizar(detalhes.getExchange());
         String nome = normalizar(detalhes.getNome());
         String simbolo = normalizar(detalhes.getSimboloRetornado());
+        String tickerConsultado = normalizar(detalhes.getTickerConsultado());
 
-        if ("CRYPTOCURRENCY".equals(quoteType)) {
+        if (ehCriptomoeda(quoteType, exchange, simbolo, tickerConsultado)) {
             return TipoAtivo.CRIPTOMOEDA;
         }
 
-        if ("ETF".equals(quoteType)) {
-            return TipoAtivo.ETF;
-        }
-
-        if ("INDEX".equals(quoteType) || "INDICE".equals(quoteType)) {
+        if (ehIndice(quoteType, simbolo, tickerConsultado, nome)) {
             return TipoAtivo.INDICE;
         }
 
-        if (ehFii(exchange, nome, simbolo)) {
+        if (ehEtf(quoteType, exchange, nome, simbolo, tickerConsultado)) {
+            return TipoAtivo.ETF;
+        }
+
+        if (ehFii(exchange, nome, simbolo, quoteType)) {
             return TipoAtivo.FII;
         }
 
@@ -122,15 +131,71 @@ public class AtivoService {
         throw new BusinessException("Nao foi possivel identificar o tipo do ativo para o ticker informado.");
     }
 
-    private boolean ehFii(String exchange, String nome, String simbolo) {
+    private boolean ehCriptomoeda(String quoteType, String exchange, String simbolo, String tickerConsultado) {
+        return "CRYPTOCURRENCY".equals(quoteType)
+                || "CRYPTO".equals(quoteType)
+                || exchange.contains("CRYPTO")
+                || simbolo.endsWith("-USD")
+                || tickerConsultado.endsWith("-USD");
+    }
+
+    private boolean ehIndice(String quoteType, String simbolo, String tickerConsultado, String nome) {
+        return "INDEX".equals(quoteType)
+                || "INDICE".equals(quoteType)
+                || simbolo.startsWith("^")
+                || tickerConsultado.startsWith("^")
+                || nome.startsWith("INDICE ")
+                || nome.contains(" IBOV")
+                || nome.contains(" S&P ")
+                || nome.contains(" NASDAQ")
+                || nome.contains(" DOW JONES");
+    }
+
+    private boolean ehEtf(String quoteType,
+                          String exchange,
+                          String nome,
+                          String simbolo,
+                          String tickerConsultado) {
+        if ("ETF".equals(quoteType)) {
+            return true;
+        }
+
+        if (nome.contains("ETF")
+                || nome.contains("EXCHANGE TRADED FUND")
+                || nome.contains("ISHARES")
+                || nome.contains("INDEX FUND")
+                || nome.contains("INDICE ETF")) {
+            return true;
+        }
+
         if (!ehMercadoBrasileiro(exchange, simbolo)) {
             return false;
+        }
+
+        String tickerBase = removerSufixoBolsa(simbolo.isBlank() ? tickerConsultado : simbolo);
+        return tickerBase.endsWith("11")
+                && !ehPossivelFiiPorNome(nome)
+                && !tickerBase.matches(".*(CI|CR|TA|TG|HG|XP|KN|BR|RB|VR|TR)$");
+    }
+
+    private boolean ehFii(String exchange, String nome, String simbolo, String quoteType) {
+        if (!ehMercadoBrasileiro(exchange, simbolo)) {
+            return false;
+        }
+
+        if ("REIT".equals(quoteType)) {
+            return true;
         }
 
         return nome.contains("FII")
                 || nome.contains("FDO IMOB")
                 || nome.contains("FUNDO IMOB")
                 || nome.contains("FUNDO DE INVESTIMENTO IMOBILIARIO")
+                || nome.contains("LOGISTICA")
+                || nome.contains("LAJES")
+                || nome.contains("SHOPPING")
+                || nome.contains("RENDA IMOBILIARIA")
+                || nome.contains("GALPOES")
                 || simbolo.endsWith("11");
     }
 
@@ -151,6 +216,26 @@ public class AtivoService {
                 || "SAO".equals(exchange)
                 || "SAOPAULO".equals(exchange)
                 || simbolo.endsWith(".SA");
+    }
+
+    private boolean ehPossivelFiiPorNome(String nome) {
+        return nome.contains("FII")
+                || nome.contains("FDO IMOB")
+                || nome.contains("FUNDO IMOB")
+                || nome.contains("FUNDO DE INVESTIMENTO IMOBILIARIO")
+                || nome.contains("LOGISTICA")
+                || nome.contains("SHOPPING")
+                || nome.contains("RENDA IMOBILIARIA")
+                || nome.contains("GALPOES")
+                || nome.contains("LAJES");
+    }
+
+    private String removerSufixoBolsa(String simbolo) {
+        if (simbolo.endsWith(".SA")) {
+            return simbolo.substring(0, simbolo.length() - 3);
+        }
+
+        return simbolo;
     }
 
     private String resolverNomeAtivo(BrapiAssetInfoDTO detalhes, String tickerFallback) {
@@ -196,6 +281,10 @@ public class AtivoService {
                 .orElse(null);
     }
 
+    private List<PrecoAtivo> buscarHistoricoRecente(Long ativoId) {
+        return precoAtivoRepository.findTop2ByAtivoIdOrderByDataHoraDesc(ativoId);
+    }
+
     private BigDecimal buscarPrecoAtualOuAtualizar(Ativo ativo) {
         BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());
         if (precoAtual != null) {
@@ -205,14 +294,78 @@ public class AtivoService {
         return precoService.atualizarPreco(ativo).orElse(null);
     }
 
-    private AtivoResponseDTO toResponse(Ativo ativo, BigDecimal precoAtual) {
+    private AtivoResponseDTO toResponse(Ativo ativo, BigDecimal precoAtual, boolean consultarResumoMercado) {
+        List<PrecoAtivo> historicoRecente = buscarHistoricoRecente(ativo.getId());
+        BrapiClient.QuoteSnapshot resumoMercado = consultarResumoMercado
+                ? brapiClient.buscarResumoMercado(ativo.getTicker(), ativo.getMercado()).orElse(null)
+                : null;
+
+        BigDecimal precoAtualResolvido = resumoMercado != null && resumoMercado.precoAtual() != null
+                ? resumoMercado.precoAtual()
+                : precoAtual;
+        BigDecimal variacaoPercentual = resumoMercado != null
+                ? resumoMercado.variacaoPercentual()
+                : null;
+
+        if (variacaoPercentual == null) {
+            variacaoPercentual = calcularVariacaoPercentual(historicoRecente, precoAtualResolvido);
+        }
+
+        BigDecimal variacao = calcularVariacaoAbsoluta(historicoRecente, precoAtualResolvido, variacaoPercentual);
+
         return AtivoResponseDTO.builder()
                 .id(ativo.getId())
                 .ticker(ativo.getTicker())
                 .nome(ativo.getNome())
                 .tipo(ativo.getTipo())
                 .mercado(ativo.getMercado())
-                .precoAtual(precoAtual)
+                .precoAtual(precoAtualResolvido)
+                .variacao(variacao)
+                .variacaoPercentual(variacaoPercentual)
+                .volume(resumoMercado != null ? resumoMercado.volume() : null)
                 .build();
     }
+
+    private BigDecimal calcularVariacaoPercentual(List<PrecoAtivo> historicoRecente, BigDecimal precoAtual) {
+        if (precoAtual == null || historicoRecente.size() < 2) {
+            return null;
+        }
+
+        BigDecimal precoAnterior = historicoRecente.get(1).getPreco();
+        if (precoAnterior == null || precoAnterior.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+
+        return precoAtual.subtract(precoAnterior)
+                .divide(precoAnterior, 6, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
+    }
+
+    private BigDecimal calcularVariacaoAbsoluta(List<PrecoAtivo> historicoRecente,
+                                                BigDecimal precoAtual,
+                                                BigDecimal variacaoPercentual) {
+        if (precoAtual == null) {
+            return null;
+        }
+
+        if (historicoRecente.size() >= 2 && historicoRecente.get(1).getPreco() != null) {
+            return precoAtual.subtract(historicoRecente.get(1).getPreco());
+        }
+
+        if (variacaoPercentual == null) {
+            return null;
+        }
+
+        BigDecimal fator = BigDecimal.ONE.add(
+                variacaoPercentual.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP)
+        );
+
+        if (fator.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+
+        BigDecimal precoAnteriorEstimado = precoAtual.divide(fator, 6, RoundingMode.HALF_UP);
+        return precoAtual.subtract(precoAnteriorEstimado);
+    }
 }
+

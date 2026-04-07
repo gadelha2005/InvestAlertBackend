@@ -25,5 +25,6 @@ public class BrapiResponseDTO {
         private String currency;
         private Double regularMarketPrice;
         private Double regularMarketChangePercent;
+        private Long regularMarketVolume;
     }
 }
