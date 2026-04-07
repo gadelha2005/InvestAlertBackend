@@ -13,4 +13,6 @@ public interface PrecoAtivoRepository extends JpaRepository<PrecoAtivo, Long> {
     Optional<PrecoAtivo> findTopByAtivoIdOrderByDataHoraDesc(Long ativoId);
 
     List<PrecoAtivo> findTop2ByAtivoIdOrderByDataHoraDesc(Long ativoId);
+
+    List<PrecoAtivo> findByAtivoIdInOrderByDataHoraAsc(List<Long> ativoIds);
 }

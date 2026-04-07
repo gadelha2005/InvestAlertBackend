@@ -18,7 +18,11 @@ public class BrapiResponseDTO {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Result {
         private String symbol;
+        private String longName;
         private String shortName;
+        private String quoteType;
+        private String exchange;
+        private String currency;
         private Double regularMarketPrice;
         private Double regularMarketChangePercent;
     }

@@ -18,4 +18,13 @@ public interface CarteiraAtivoRepository extends JpaRepository<CarteiraAtivo, Lo
 
     @Query("SELECT ca FROM CarteiraAtivo ca JOIN FETCH ca.ativo WHERE ca.carteira.id = :carteiraId")
     List<CarteiraAtivo> findByCarteiraIdWithAtivo(@Param("carteiraId") Long carteiraId);
+
+    @Query("""
+            SELECT ca
+            FROM CarteiraAtivo ca
+            JOIN FETCH ca.ativo
+            JOIN FETCH ca.carteira c
+            WHERE c.usuario.id = :usuarioId
+            """)
+    List<CarteiraAtivo> findByUsuarioIdWithAtivo(@Param("usuarioId") Long usuarioId);
 }

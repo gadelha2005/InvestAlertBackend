@@ -1,5 +1,6 @@
 package com.investalert.investalert.integration;
 
+import com.investalert.investalert.integration.dto.BrapiAssetInfoDTO;
 import com.investalert.investalert.integration.dto.BrapiResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,55 @@ public class BrapiClient {
         return Optional.empty();
     }
 
+    public Optional<BrapiAssetInfoDTO> buscarDetalhesAtivo(String ticker) {
+        for (String tickerConsulta : montarTickersConsultaSemMercado(ticker)) {
+            Optional<BrapiAssetInfoDTO> detalhes = buscarDetalhesPorTicker(tickerConsulta);
+            if (detalhes.isPresent()) {
+                return detalhes;
+            }
+        }
+
+        return Optional.empty();
+    }
+
     private Optional<BigDecimal> buscarPrecoPorTicker(String ticker) {
+        Optional<BrapiResponseDTO.Result> resultado = buscarPrimeiroResultado(ticker);
+        if (resultado.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Double preco = resultado.get().getRegularMarketPrice();
+        if (preco == null) {
+            log.warn("Preco nulo retornado pela Brapi para ticker: {}", ticker);
+            return Optional.empty();
+        }
+
+        log.debug("Preco obtido da Brapi para {}: {}", ticker, preco);
+        return Optional.of(BigDecimal.valueOf(preco));
+    }
+
+    private Optional<BrapiAssetInfoDTO> buscarDetalhesPorTicker(String ticker) {
+        Optional<BrapiResponseDTO.Result> resultado = buscarPrimeiroResultado(ticker);
+        if (resultado.isEmpty()) {
+            return Optional.empty();
+        }
+
+        BrapiResponseDTO.Result item = resultado.get();
+        String nome = item.getLongName() != null && !item.getLongName().isBlank()
+                ? item.getLongName()
+                : item.getShortName();
+
+        return Optional.of(BrapiAssetInfoDTO.builder()
+                .tickerConsultado(ticker)
+                .simboloRetornado(item.getSymbol())
+                .nome(nome)
+                .quoteType(item.getQuoteType())
+                .exchange(item.getExchange())
+                .currency(item.getCurrency())
+                .build());
+    }
+
+    private Optional<BrapiResponseDTO.Result> buscarPrimeiroResultado(String ticker) {
         try {
             WebClient.RequestHeadersSpec<?> request = webClientBuilder
                     .baseUrl(baseUrl)
@@ -56,28 +105,17 @@ public class BrapiClient {
                     .bodyToMono(BrapiResponseDTO.class)
                     .block();
 
-            if (response == null
-                    || response.getResults() == null
-                    || response.getResults().isEmpty()) {
+            if (response == null || response.getResults() == null || response.getResults().isEmpty()) {
                 log.warn("Nenhum resultado retornado pela Brapi para ticker: {}", ticker);
                 return Optional.empty();
             }
 
-            Double preco = response.getResults().get(0).getRegularMarketPrice();
-
-            if (preco == null) {
-                log.warn("Preco nulo retornado pela Brapi para ticker: {}", ticker);
-                return Optional.empty();
-            }
-
-            log.debug("Preco obtido da Brapi para {}: {}", ticker, preco);
-            return Optional.of(BigDecimal.valueOf(preco));
-
+            return Optional.of(response.getResults().get(0));
         } catch (WebClientResponseException.Unauthorized e) {
             log.error("Brapi recusou a autenticacao para ticker {}. Verifique o token configurado.", ticker);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Erro ao buscar preco na Brapi para ticker {}: {}", ticker, e.getMessage());
+            log.error("Erro ao consultar a Brapi para ticker {}: {}", ticker, e.getMessage());
             return Optional.empty();
         }
     }
@@ -104,6 +142,18 @@ public class BrapiClient {
         tickers.add(tickerNormalizado);
 
         if (deveTentarTickerB3(tickerNormalizado, mercado)) {
+            tickers.add(tickerNormalizado + ".SA");
+        }
+
+        return tickers;
+    }
+
+    private List<String> montarTickersConsultaSemMercado(String ticker) {
+        List<String> tickers = new ArrayList<>();
+        String tickerNormalizado = ticker.toUpperCase(Locale.ROOT);
+        tickers.add(tickerNormalizado);
+
+        if (!tickerNormalizado.contains(".")) {
             tickers.add(tickerNormalizado + ".SA");
         }
 

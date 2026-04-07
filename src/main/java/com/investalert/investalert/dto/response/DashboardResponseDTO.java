@@ -18,5 +18,6 @@ public class DashboardResponseDTO {
     private Long alertasAtivos;
     private Long notificacoesNaoLidas;
     private List<CarteiraAtivoResponseDTO> ativos;
+    private List<DashboardHistoricoPointResponseDTO> historicoCarteira;
     private List<MetaResponseDTO> metas;
 }
