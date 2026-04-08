@@ -99,3 +99,4 @@ secrets/
 # OUTROS
 ############################################
 HELP.md
+src/main/resources/db/

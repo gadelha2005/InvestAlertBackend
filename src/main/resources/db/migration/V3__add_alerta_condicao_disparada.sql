@@ -1,2 +1,0 @@
-ALTER TABLE alerta
-    ADD COLUMN condicao_disparada BOOLEAN NOT NULL DEFAULT FALSE;

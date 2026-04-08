@@ -47,7 +47,7 @@ public class AtivoService {
         Ativo ativo = Ativo.builder()
                 .ticker(resolverTickerPersistido(detalhes, tickerNormalizado))
                 .nome(resolverNomeAtivo(detalhes, tickerNormalizado))
-                .tipo(mapearTipoAtivo(detalhes))
+                .tipo(dto.getTipo())
                 .mercado(resolverMercado(detalhes))
                 .build();
 
