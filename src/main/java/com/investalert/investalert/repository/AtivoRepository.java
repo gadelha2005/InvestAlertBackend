@@ -3,6 +3,7 @@ package com.investalert.investalert.repository;
 import com.investalert.investalert.model.Ativo;
 import com.investalert.investalert.model.enums.TipoAtivo;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,4 +17,7 @@ public interface AtivoRepository extends JpaRepository<Ativo, Long> {
     boolean existsByTicker(String ticker);
 
     List<Ativo> findByTipo(TipoAtivo tipo);
+
+    @Query("SELECT a FROM Ativo a")
+    List<Ativo> findAllComPrecosRecentes();
 }

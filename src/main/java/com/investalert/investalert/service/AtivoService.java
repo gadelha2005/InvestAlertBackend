@@ -20,6 +20,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -83,8 +85,41 @@ public class AtivoService {
 
     @Transactional(readOnly = true)
     public List<AtivoResponseDTO> listarParaScanner() {
-        return ativoRepository.findAll().stream()
-                .map(ativo -> toResponse(ativo, buscarPrecoAtualOuAtualizar(ativo), true))
+        List<Ativo> ativos = ativoRepository.findAll();
+        
+        if (ativos.isEmpty()) {
+            return List.of();
+        }
+
+        // Buscar todos os IDs dos ativos
+        List<Long> ativoIds = ativos.stream()
+                .map(Ativo::getId)
+                .toList();
+
+        // Buscar todos os preços recentes em uma única query
+        Map<Long, PrecoAtivo> precosPorAtivoId = precoAtivoRepository
+                .findLatestPricesByAtivoIds(ativoIds).stream()
+                .collect(Collectors.toMap(
+                        pa -> pa.getAtivo().getId(),
+                        pa -> pa
+                ));
+
+        // Buscar histórico recente (últimos 2 preços) para calcular variação
+        Map<Long, List<PrecoAtivo>> historicoPorAtivoId = ativos.stream()
+                .collect(Collectors.toMap(
+                        Ativo::getId,
+                        ativo -> precoAtivoRepository.findTop2ByAtivoIdOrderByDataHoraDesc(ativo.getId())
+                ));
+
+        // Mapear para resposta sem consultarResumoMercado
+        return ativos.stream()
+                .map(ativo -> {
+                    BigDecimal precoAtual = precosPorAtivoId.containsKey(ativo.getId()) 
+                            ? precosPorAtivoId.get(ativo.getId()).getPreco()
+                            : buscarPrecoAtual(ativo.getId());
+                    List<PrecoAtivo> historico = historicoPorAtivoId.get(ativo.getId());
+                    return toResponseScannerOtimizado(ativo, precoAtual, historico);
+                })
                 .toList();
     }
 
@@ -323,6 +358,24 @@ public class AtivoService {
                 .variacao(variacao)
                 .variacaoPercentual(variacaoPercentual)
                 .volume(resumoMercado != null ? resumoMercado.volume() : null)
+                .build();
+    }
+
+    private AtivoResponseDTO toResponseScannerOtimizado(Ativo ativo, BigDecimal precoAtual, List<PrecoAtivo> historicoRecente) {
+        // Versão otimizada para scanner sem chamadas a resumoMercado
+        BigDecimal variacaoPercentual = calcularVariacaoPercentual(historicoRecente, precoAtual);
+        BigDecimal variacao = calcularVariacaoAbsoluta(historicoRecente, precoAtual, variacaoPercentual);
+
+        return AtivoResponseDTO.builder()
+                .id(ativo.getId())
+                .ticker(ativo.getTicker())
+                .nome(ativo.getNome())
+                .tipo(ativo.getTipo())
+                .mercado(ativo.getMercado())
+                .precoAtual(precoAtual)
+                .variacao(variacao)
+                .variacaoPercentual(variacaoPercentual)
+                .volume(null) // Não consultarmos volume no scanner para melhor performance
                 .build();
     }
 
