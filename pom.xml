@@ -134,32 +134,16 @@
 
     <build>
         <resources>
-            <!-- Inclui application.yml e outras configurações -->
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-                <includes>
-                    <include>**/*.yml</include>
-                    <include>**/*.yaml</include>
-                    <include>**/*.properties</include>
-                </includes>
-            </resource>
-            <!-- Inclui migrations SQL (Flyway) - CRÍTICO! -->
+            <!-- Inclui TUDO de resources por padrão -->
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>false</filtering>
-                <includes>
-                    <include>db/migration/**</include>
-                </includes>
             </resource>
-            <!-- Inclui outros recursos estáticos -->
+            <!-- EXPLICITAMENTE garante que migrations sejam incluídas -->
             <resource>
-                <directory>src/main/resources</directory>
+                <directory>src/main/resources/db/migration</directory>
+                <targetPath>db/migration</targetPath>
                 <filtering>false</filtering>
-                <includes>
-                    <include>static/**</include>
-                    <include>templates/**</include>
-                </includes>
             </resource>
         </resources>
         <plugins>
