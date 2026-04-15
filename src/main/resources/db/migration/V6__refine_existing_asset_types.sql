@@ -1,0 +1,29 @@
+UPDATE ativo
+SET tipo = 'ETF'
+WHERE (
+        UPPER(COALESCE(nome, '')) LIKE '%ETF%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%EXCHANGE TRADED FUND%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%ISHARES%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%FUNDO DE INDICE%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%FUNDO DE INDICE%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%FUNDO DE INVESTIMENTO EM COTAS DE FUNDO DE INDICE%'
+    )
+    AND UPPER(COALESCE(ticker, '')) REGEXP '11(\\.SA)?$';
+
+UPDATE ativo
+SET tipo = 'FII'
+WHERE (
+        UPPER(COALESCE(nome, '')) LIKE '%FUNDO DE INVESTIMENTO IMOBILIARIO%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%INVESTIMENTO IMOBILIARIO%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%FUNDO IMOBILIARIO%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%FII%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%SHOPPING%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%LOGISTICA%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%LAJES%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%GALPOES%'
+        OR UPPER(COALESCE(nome, '')) LIKE '%RENDA%'
+    )
+    AND UPPER(COALESCE(ticker, '')) REGEXP '11(\\.SA)?$'
+    AND UPPER(COALESCE(nome, '')) NOT LIKE '%FUNDO DE INDICE%'
+    AND UPPER(COALESCE(nome, '')) NOT LIKE '%ISHARES%'
+    AND UPPER(COALESCE(nome, '')) NOT LIKE '%ETF%';
