@@ -1,78 +1,84 @@
 package com.investalert.investalert.controller;
 
+import com.investalert.investalert.config.security.UserPrincipal;
 import com.investalert.investalert.dto.request.CarteiraAtivoRequestDTO;
 import com.investalert.investalert.dto.request.CarteiraRequestDTO;
 import com.investalert.investalert.dto.response.CarteiraAtivoResponseDTO;
+import com.investalert.investalert.dto.response.CarteiraHistoricoResponseDTO;
 import com.investalert.investalert.dto.response.CarteiraResponseDTO;
 import com.investalert.investalert.service.CarteiraService;
-import com.investalert.investalert.service.UsuarioService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Carteira")
 @RestController
 @RequestMapping("/api/carteiras")
 @RequiredArgsConstructor
 public class CarteiraController {
 
     private final CarteiraService carteiraService;
-    private final UsuarioService usuarioService;
 
+    @Operation(summary = "Criar carteira")
     @PostMapping
     public ResponseEntity<CarteiraResponseDTO> criar(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody @Valid CarteiraRequestDTO dto) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.status(HttpStatus.CREATED).body(carteiraService.criar(usuarioId, dto));
+        return ResponseEntity.status(HttpStatus.CREATED).body(carteiraService.criar(principal.getUsuarioId(), dto));
     }
 
+    @Operation(summary = "Listar carteiras do usuário")
     @GetMapping
     public ResponseEntity<List<CarteiraResponseDTO>> listar(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(carteiraService.listarPorUsuario(usuarioId));
+        return ResponseEntity.ok(carteiraService.listarPorUsuario(principal.getUsuarioId()));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<CarteiraResponseDTO> buscarPorId(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(carteiraService.buscarPorId(id, usuarioId));
+        return ResponseEntity.ok(carteiraService.buscarPorId(id, principal.getUsuarioId()));
     }
 
+    @Operation(summary = "Adicionar ativo à carteira")
     @PostMapping("/{id}/ativos")
     public ResponseEntity<CarteiraAtivoResponseDTO> adicionarAtivo(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestBody @Valid CarteiraAtivoRequestDTO dto) {
 
-        Long usuarioId = getUsuarioId(userDetails);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(carteiraService.adicionarAtivo(id, usuarioId, dto));
+                .body(carteiraService.adicionarAtivo(id, principal.getUsuarioId(), dto));
     }
 
+    @Operation(summary = "Remover ativo da carteira")
     @DeleteMapping("/{id}/ativos/{carteiraAtivoId}")
     public ResponseEntity<Void> removerAtivo(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @PathVariable Long carteiraAtivoId) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        carteiraService.removerAtivo(id, carteiraAtivoId, usuarioId);
+        carteiraService.removerAtivo(id, carteiraAtivoId, principal.getUsuarioId());
         return ResponseEntity.noContent().build();
     }
 
-    private Long getUsuarioId(UserDetails userDetails) {
-        return usuarioService.buscarEntidadePorEmail(userDetails.getUsername()).getId();
+    @Operation(summary = "Histórico de eventos da carteira")
+    @GetMapping("/{id}/historico")
+    public ResponseEntity<List<CarteiraHistoricoResponseDTO>> historico(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(carteiraService.buscarHistorico(id, principal.getUsuarioId()));
     }
 }

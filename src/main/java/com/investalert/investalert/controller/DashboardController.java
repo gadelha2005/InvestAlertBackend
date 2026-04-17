@@ -1,31 +1,26 @@
 package com.investalert.investalert.controller;
 
+import com.investalert.investalert.config.security.UserPrincipal;
 import com.investalert.investalert.dto.response.DashboardResponseDTO;
 import com.investalert.investalert.service.DashboardService;
-import com.investalert.investalert.service.UsuarioService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "Dashboard")
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
 public class DashboardController {
 
     private final DashboardService dashboardService;
-    private final UsuarioService usuarioService;
 
     @GetMapping
     public ResponseEntity<DashboardResponseDTO> getDashboard(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(dashboardService.getDashboard(usuarioId));
-    }
-
-    private Long getUsuarioId(UserDetails userDetails) {
-        return usuarioService.buscarEntidadePorEmail(userDetails.getUsername()).getId();
+        return ResponseEntity.ok(dashboardService.getDashboard(principal.getUsuarioId()));
     }
 }

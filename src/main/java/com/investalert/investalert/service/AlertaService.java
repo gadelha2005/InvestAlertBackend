@@ -30,9 +30,7 @@ public class AlertaService {
 
     @Transactional
     public AlertaResponseDTO criar(Long usuarioId, AlertaRequestDTO dto) {
-        Usuario usuario = usuarioService.buscarEntidadePorEmail(
-                usuarioService.buscarPorId(usuarioId).getEmail()
-        );
+        Usuario usuario = usuarioService.buscarEntidadePorId(usuarioId);
 
         Ativo ativo = ativoService.buscarEntidadePorTicker(dto.getTicker());
         BigDecimal precoAtual = buscarPrecoAtual(ativo.getId());

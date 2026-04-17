@@ -2,6 +2,7 @@ package com.investalert.investalert.integration;
 
 import com.investalert.investalert.integration.dto.BrapiAssetInfoDTO;
 import com.investalert.investalert.integration.dto.BrapiResponseDTO;
+import com.investalert.investalert.integration.dto.PontoHistoricoDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,7 +12,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -49,6 +54,63 @@ public class BrapiClient {
         }
 
         return Optional.empty();
+    }
+
+    public List<PontoHistoricoDTO> buscarHistorico(String ticker, String mercado, String range, String interval) {
+        List<String> tickers = montarTickersConsulta(ticker, mercado);
+        for (String tickerConsulta : tickers) {
+            List<PontoHistoricoDTO> pontos = buscarHistoricoPorTicker(tickerConsulta, range, interval);
+            if (!pontos.isEmpty()) {
+                return pontos;
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    private List<PontoHistoricoDTO> buscarHistoricoPorTicker(String ticker, String range, String interval) {
+        try {
+            BrapiResponseDTO response = webClientBuilder
+                    .baseUrl(baseUrl)
+                    .build()
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/quote/{ticker}")
+                            .queryParam("range", range)
+                            .queryParam("interval", interval)
+                            .queryParam("fundamental", "false")
+                            .queryParamIfPresent("token", obterTokenConfigurado())
+                            .build(ticker))
+                    .headers(headers -> adicionarAutorizacao(headers, token))
+                    .retrieve()
+                    .bodyToMono(BrapiResponseDTO.class)
+                    .block();
+
+            if (response == null || response.getResults() == null || response.getResults().isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            List<BrapiResponseDTO.HistoricalDataPoint> historico =
+                    response.getResults().get(0).getHistoricalDataPrice();
+
+            if (historico == null || historico.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                    .withZone(ZoneId.of("America/Sao_Paulo"));
+
+            return historico.stream()
+                    .filter(p -> p.getClose() != null)
+                    .map(p -> new PontoHistoricoDTO(
+                            fmt.format(Instant.ofEpochSecond(p.getDate())),
+                            BigDecimal.valueOf(p.getClose())
+                    ))
+                    .toList();
+
+        } catch (Exception e) {
+            log.error("Erro ao buscar historico Brapi para {}: {}", ticker, e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     public Optional<QuoteSnapshot> buscarResumoMercado(String ticker, String mercado) {

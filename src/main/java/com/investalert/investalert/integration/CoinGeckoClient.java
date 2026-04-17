@@ -1,6 +1,8 @@
 package com.investalert.investalert.integration;
 
+import com.investalert.investalert.integration.dto.CoinGeckoMarketChartDTO;
 import com.investalert.investalert.integration.dto.CoinGeckoResponseDTO;
+import com.investalert.investalert.integration.dto.PontoHistoricoDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,6 +10,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -33,6 +40,40 @@ public class CoinGeckoClient {
             "LINK", "chainlink",
             "LTC", "litecoin"
     );
+
+    public List<PontoHistoricoDTO> buscarHistoricoCrypto(String ticker, int dias) {
+        try {
+            String coinId = TICKER_TO_ID.getOrDefault(ticker.toUpperCase(), ticker.toLowerCase());
+
+            CoinGeckoMarketChartDTO response = webClientBuilder
+                    .baseUrl(baseUrl)
+                    .build()
+                    .get()
+                    .uri("/coins/{id}/market_chart?vs_currency=brl&days={dias}", coinId, dias)
+                    .retrieve()
+                    .bodyToMono(CoinGeckoMarketChartDTO.class)
+                    .block();
+
+            if (response == null || response.getPrices() == null || response.getPrices().isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                    .withZone(ZoneId.of("America/Sao_Paulo"));
+
+            return response.getPrices().stream()
+                    .filter(p -> p.size() >= 2 && p.get(1) != null)
+                    .map(p -> new PontoHistoricoDTO(
+                            fmt.format(Instant.ofEpochMilli(p.get(0).longValue())),
+                            BigDecimal.valueOf(p.get(1))
+                    ))
+                    .toList();
+
+        } catch (Exception e) {
+            log.error("Erro ao buscar historico CoinGecko para {}: {}", ticker, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
 
     public Optional<BigDecimal> buscarPreco(String ticker) {
         try {

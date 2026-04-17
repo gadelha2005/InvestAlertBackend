@@ -27,9 +27,7 @@ public class MetaService {
 
     @Transactional
     public MetaResponseDTO criar(Long usuarioId, MetaRequestDTO dto) {
-        Usuario usuario = usuarioService.buscarEntidadePorEmail(
-                usuarioService.buscarPorId(usuarioId).getEmail()
-        );
+        Usuario usuario = usuarioService.buscarEntidadePorId(usuarioId);
 
         Meta meta = Meta.builder()
                 .usuario(usuario)

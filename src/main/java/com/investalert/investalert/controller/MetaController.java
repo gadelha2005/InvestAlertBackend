@@ -1,22 +1,23 @@
 package com.investalert.investalert.controller;
 
+import com.investalert.investalert.config.security.UserPrincipal;
 import com.investalert.investalert.dto.request.MetaMovimentacaoRequestDTO;
 import com.investalert.investalert.dto.request.MetaRequestDTO;
 import com.investalert.investalert.dto.response.MetaMovimentacaoResponseDTO;
 import com.investalert.investalert.dto.response.MetaResponseDTO;
 import com.investalert.investalert.service.MetaMovimentacaoService;
 import com.investalert.investalert.service.MetaService;
-import com.investalert.investalert.service.UsuarioService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Metas Financeiras")
 @RestController
 @RequestMapping("/api/metas")
 @RequiredArgsConstructor
@@ -24,77 +25,65 @@ public class MetaController {
 
     private final MetaService metaService;
     private final MetaMovimentacaoService metaMovimentacaoService;
-    private final UsuarioService usuarioService;
 
     @PostMapping
     public ResponseEntity<MetaResponseDTO> criar(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody @Valid MetaRequestDTO dto) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.status(HttpStatus.CREATED).body(metaService.criar(usuarioId, dto));
+        return ResponseEntity.status(HttpStatus.CREATED).body(metaService.criar(principal.getUsuarioId(), dto));
     }
 
     @GetMapping
     public ResponseEntity<List<MetaResponseDTO>> listar(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(metaService.listarPorUsuario(usuarioId));
+        return ResponseEntity.ok(metaService.listarPorUsuario(principal.getUsuarioId()));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<MetaResponseDTO> atualizar(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestBody @Valid MetaRequestDTO dto) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(metaService.atualizar(id, usuarioId, dto));
+        return ResponseEntity.ok(metaService.atualizar(id, principal.getUsuarioId(), dto));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletar(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        metaService.deletar(id, usuarioId);
+        metaService.deletar(id, principal.getUsuarioId());
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/movimentacoes")
     public ResponseEntity<MetaMovimentacaoResponseDTO> criarMovimentacao(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestBody @Valid MetaMovimentacaoRequestDTO dto) {
 
-        Long usuarioId = getUsuarioId(userDetails);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(metaMovimentacaoService.criar(id, usuarioId, dto));
+                .body(metaMovimentacaoService.criar(id, principal.getUsuarioId(), dto));
     }
 
     @GetMapping("/{id}/movimentacoes")
     public ResponseEntity<List<MetaMovimentacaoResponseDTO>> listarMovimentacoes(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(metaMovimentacaoService.listarPorMeta(id, usuarioId));
+        return ResponseEntity.ok(metaMovimentacaoService.listarPorMeta(id, principal.getUsuarioId()));
     }
 
     @DeleteMapping("/{metaId}/movimentacoes/{movimentacaoId}")
     public ResponseEntity<Void> deletarMovimentacao(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long metaId,
             @PathVariable Long movimentacaoId) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        metaMovimentacaoService.deletar(metaId, movimentacaoId, usuarioId);
+        metaMovimentacaoService.deletar(metaId, movimentacaoId, principal.getUsuarioId());
         return ResponseEntity.noContent().build();
-    }
-
-    private Long getUsuarioId(UserDetails userDetails) {
-        return usuarioService.buscarEntidadePorEmail(userDetails.getUsername()).getId();
     }
 }

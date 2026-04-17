@@ -44,6 +44,15 @@ jwt:
   secret: ${JWT_SECRET:dev-secret-key-change-in-production}
   expiration: ${JWT_EXPIRATION:86400000}
 
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5173}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
 integration:
   brapi:
     base-url: https://brapi.dev/api
@@ -93,6 +102,9 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+
+frontend:
+  url: ${FRONTEND_URL}
 
 integration:
   brapi:

@@ -3,6 +3,7 @@ package com.investalert.investalert.service;
 import com.investalert.investalert.dto.request.CarteiraAtivoRequestDTO;
 import com.investalert.investalert.dto.request.CarteiraRequestDTO;
 import com.investalert.investalert.dto.response.CarteiraAtivoResponseDTO;
+import com.investalert.investalert.dto.response.CarteiraHistoricoResponseDTO;
 import com.investalert.investalert.dto.response.CarteiraResponseDTO;
 import com.investalert.investalert.exception.BusinessException;
 import com.investalert.investalert.exception.ResourceNotFoundException;
@@ -11,9 +12,12 @@ import com.investalert.investalert.integration.PrecoService;
 import com.investalert.investalert.model.Ativo;
 import com.investalert.investalert.model.Carteira;
 import com.investalert.investalert.model.CarteiraAtivo;
+import com.investalert.investalert.model.CarteiraHistorico;
 import com.investalert.investalert.model.PrecoAtivo;
 import com.investalert.investalert.model.Usuario;
+import com.investalert.investalert.model.enums.TipoEventoCarteira;
 import com.investalert.investalert.repository.CarteiraAtivoRepository;
+import com.investalert.investalert.repository.CarteiraHistoricoRepository;
 import com.investalert.investalert.repository.CarteiraRepository;
 import com.investalert.investalert.repository.PrecoAtivoRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,22 +36,23 @@ public class CarteiraService {
     private final CarteiraRepository carteiraRepository;
     private final CarteiraAtivoRepository carteiraAtivoRepository;
     private final PrecoAtivoRepository precoAtivoRepository;
+    private final CarteiraHistoricoRepository carteiraHistoricoRepository;
     private final AtivoService ativoService;
     private final UsuarioService usuarioService;
     private final PrecoService precoService;
 
     @Transactional
     public CarteiraResponseDTO criar(Long usuarioId, CarteiraRequestDTO dto) {
-        Usuario usuario = usuarioService.buscarEntidadePorEmail(
-                usuarioService.buscarPorId(usuarioId).getEmail()
-        );
+        Usuario usuario = usuarioService.buscarEntidadePorId(usuarioId);
 
         Carteira carteira = Carteira.builder()
                 .usuario(usuario)
                 .nome(dto.getNome())
                 .build();
 
-        return toResponse(carteiraRepository.save(carteira), List.of());
+        Carteira salva = carteiraRepository.save(carteira);
+        registrarHistorico(salva, TipoEventoCarteira.CARTEIRA_CRIADA, BigDecimal.ZERO, "Carteira criada");
+        return toResponse(salva, List.of());
     }
 
     @Transactional(readOnly = true)
@@ -99,6 +104,9 @@ public class CarteiraService {
                     dto.getPrecoMedio()
             );
 
+            BigDecimal valorTotalManual = calcularValorTotalCarteira(carteiraId);
+            registrarHistorico(carteira, TipoEventoCarteira.ATIVO_ADICIONADO, valorTotalManual,
+                    "Ativo adicionado: " + ativo.getTicker());
             return toAtivoResponse(salvo, buscarPrecoAtual(ativo.getId()));
         }
 
@@ -134,18 +142,67 @@ public class CarteiraService {
                 precoMedio
         );
 
-        return toAtivoResponse(salvo, buscarPrecoAtual(ativo.getId()));
+        BigDecimal precoFinal = buscarPrecoAtual(ativo.getId());
+        BigDecimal valorTotal = calcularValorTotalCarteira(carteiraId);
+        registrarHistorico(carteira, TipoEventoCarteira.ATIVO_ADICIONADO, valorTotal,
+                "Ativo adicionado: " + ativo.getTicker());
+
+        return toAtivoResponse(salvo, precoFinal);
     }
 
     @Transactional
     public void removerAtivo(Long carteiraId, Long carteiraAtivoId, Long usuarioId) {
-        carteiraRepository.findByIdAndUsuarioId(carteiraId, usuarioId)
+        Carteira carteira = carteiraRepository.findByIdAndUsuarioId(carteiraId, usuarioId)
                 .orElseThrow(() -> new UnauthorizedException("Carteira nao encontrada ou sem permissao"));
 
         CarteiraAtivo carteiraAtivo = carteiraAtivoRepository.findById(carteiraAtivoId)
                 .orElseThrow(() -> new ResourceNotFoundException("CarteiraAtivo", carteiraAtivoId));
 
+        String ticker = carteiraAtivo.getAtivo().getTicker();
         carteiraAtivoRepository.delete(carteiraAtivo);
+
+        BigDecimal valorTotal = calcularValorTotalCarteira(carteiraId);
+        registrarHistorico(carteira, TipoEventoCarteira.ATIVO_REMOVIDO, valorTotal,
+                "Ativo removido: " + ticker);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CarteiraHistoricoResponseDTO> buscarHistorico(Long carteiraId, Long usuarioId) {
+        carteiraRepository.findByIdAndUsuarioId(carteiraId, usuarioId)
+                .orElseThrow(() -> new ResourceNotFoundException("Carteira", carteiraId));
+
+        return carteiraHistoricoRepository.findByCarteiraIdOrderByDataHoraAsc(carteiraId).stream()
+                .map(h -> CarteiraHistoricoResponseDTO.builder()
+                        .id(h.getId())
+                        .dataHora(h.getDataHora())
+                        .valorTotal(h.getValorTotal())
+                        .tipoEvento(h.getTipoEvento())
+                        .descricao(h.getDescricao())
+                        .build())
+                .toList();
+    }
+
+    private void registrarHistorico(Carteira carteira, TipoEventoCarteira tipo,
+                                    BigDecimal valorTotal, String descricao) {
+        CarteiraHistorico historico = CarteiraHistorico.builder()
+                .carteira(carteira)
+                .usuario(carteira.getUsuario())
+                .valorTotal(valorTotal)
+                .tipoEvento(tipo)
+                .descricao(descricao)
+                .build();
+        carteiraHistoricoRepository.save(historico);
+    }
+
+    private BigDecimal calcularValorTotalCarteira(Long carteiraId) {
+        List<CarteiraAtivo> itens = carteiraAtivoRepository.findByCarteiraIdWithAtivo(carteiraId);
+        return itens.stream()
+                .map(ca -> {
+                    BigDecimal preco = buscarPrecoAtual(ca.getAtivo().getId());
+                    if (preco == null) return BigDecimal.ZERO;
+                    return preco.multiply(ca.getQuantidade());
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private BigDecimal buscarPrecoAtual(Long ativoId) {

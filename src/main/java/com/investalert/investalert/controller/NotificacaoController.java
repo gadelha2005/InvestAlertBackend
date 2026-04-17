@@ -1,76 +1,66 @@
 package com.investalert.investalert.controller;
 
+import com.investalert.investalert.config.security.UserPrincipal;
 import com.investalert.investalert.dto.response.NotificacaoResponseDTO;
 import com.investalert.investalert.service.NotificacaoService;
-import com.investalert.investalert.service.UsuarioService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "Notificações")
 @RestController
 @RequestMapping("/api/notificacoes")
 @RequiredArgsConstructor
 public class NotificacaoController {
 
     private final NotificacaoService notificacaoService;
-    private final UsuarioService usuarioService;
 
     @GetMapping
     public ResponseEntity<List<NotificacaoResponseDTO>> listar(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(notificacaoService.listarPorUsuario(usuarioId));
+        return ResponseEntity.ok(notificacaoService.listarPorUsuario(principal.getUsuarioId()));
     }
 
     @GetMapping("/nao-lidas")
     public ResponseEntity<List<NotificacaoResponseDTO>> listarNaoLidas(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(notificacaoService.listarNaoLidas(usuarioId));
+        return ResponseEntity.ok(notificacaoService.listarNaoLidas(principal.getUsuarioId()));
     }
 
     @GetMapping("/nao-lidas/count")
     public ResponseEntity<Long> contarNaoLidas(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(notificacaoService.contarNaoLidas(usuarioId));
+        return ResponseEntity.ok(notificacaoService.contarNaoLidas(principal.getUsuarioId()));
     }
 
     @PatchMapping("/{id}/lida")
     public ResponseEntity<NotificacaoResponseDTO> marcarComoLida(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        return ResponseEntity.ok(notificacaoService.marcarComoLida(id, usuarioId));
+        return ResponseEntity.ok(notificacaoService.marcarComoLida(id, principal.getUsuarioId()));
     }
 
     @PatchMapping("/lidas")
     public ResponseEntity<Void> marcarTodasComoLidas(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        notificacaoService.marcarTodasComoLidas(usuarioId);
+        notificacaoService.marcarTodasComoLidas(principal.getUsuarioId());
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping
     public ResponseEntity<Void> deletarTodas(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal UserPrincipal principal) {
 
-        Long usuarioId = getUsuarioId(userDetails);
-        notificacaoService.deletarTodas(usuarioId);
+        notificacaoService.deletarTodas(principal.getUsuarioId());
         return ResponseEntity.noContent().build();
-    }
-
-    private Long getUsuarioId(UserDetails userDetails) {
-        return usuarioService.buscarEntidadePorEmail(userDetails.getUsername()).getId();
     }
 }

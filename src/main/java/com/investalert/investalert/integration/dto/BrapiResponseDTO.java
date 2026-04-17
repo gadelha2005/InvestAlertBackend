@@ -26,5 +26,19 @@ public class BrapiResponseDTO {
         private Double regularMarketPrice;
         private Double regularMarketChangePercent;
         private Long regularMarketVolume;
+        private List<HistoricalDataPoint> historicalDataPrice;
+    }
+
+    @Getter
+    @Setter
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class HistoricalDataPoint {
+        private Long date;
+        private Double open;
+        private Double high;
+        private Double low;
+        private Double close;
+        private Long volume;
+        private Double adjustedClose;
     }
 }

@@ -2,11 +2,15 @@ package com.investalert.investalert.service;
 
 import com.investalert.investalert.dto.request.AtivoRequestDTO;
 import com.investalert.investalert.dto.response.AtivoResponseDTO;
+import com.investalert.investalert.dto.response.DiaResumoDTO;
+import com.investalert.investalert.dto.response.HistoricoAtivoResponseDTO;
 import com.investalert.investalert.exception.BusinessException;
 import com.investalert.investalert.exception.ResourceNotFoundException;
 import com.investalert.investalert.integration.BrapiClient;
+import com.investalert.investalert.integration.CoinGeckoClient;
 import com.investalert.investalert.integration.PrecoService;
 import com.investalert.investalert.integration.dto.BrapiAssetInfoDTO;
+import com.investalert.investalert.integration.dto.PontoHistoricoDTO;
 import com.investalert.investalert.model.Ativo;
 import com.investalert.investalert.model.PrecoAtivo;
 import com.investalert.investalert.model.enums.TipoAtivo;
@@ -18,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -31,6 +37,7 @@ public class AtivoService {
     private final PrecoAtivoRepository precoAtivoRepository;
     private final PrecoService precoService;
     private final BrapiClient brapiClient;
+    private final CoinGeckoClient coinGeckoClient;
 
     @Transactional
     public AtivoResponseDTO cadastrar(AtivoRequestDTO dto) {
@@ -127,6 +134,88 @@ public class AtivoService {
     public Ativo buscarEntidadePorTicker(String ticker) {
         return ativoRepository.findByTicker(ticker.toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new ResourceNotFoundException("Ativo", "ticker", ticker));
+    }
+
+    @Transactional(readOnly = true)
+    public HistoricoAtivoResponseDTO buscarHistorico(String ticker, String periodo) {
+        Ativo ativo = buscarEntidadePorTicker(ticker);
+        boolean isCrypto = ativo.getTipo() == TipoAtivo.CRIPTOMOEDA;
+
+        List<PontoHistoricoDTO> dados;
+        List<PontoHistoricoDTO> ultimos7DiasRaw;
+
+        if (isCrypto) {
+            int dias = mapearPeriodoCoinGecko(periodo);
+            dados = coinGeckoClient.buscarHistoricoCrypto(ativo.getTicker(), dias);
+            ultimos7DiasRaw = coinGeckoClient.buscarHistoricoCrypto(ativo.getTicker(), 7);
+        } else {
+            String[] rangeInterval = mapearPeriodoBrapi(periodo);
+            dados = brapiClient.buscarHistorico(ativo.getTicker(), ativo.getMercado(),
+                    rangeInterval[0], rangeInterval[1]);
+            ultimos7DiasRaw = brapiClient.buscarHistorico(ativo.getTicker(), ativo.getMercado(),
+                    "5d", "1d");
+        }
+
+        List<DiaResumoDTO> ultimos7Dias = construirResumo7Dias(ultimos7DiasRaw);
+
+        return HistoricoAtivoResponseDTO.builder()
+                .ticker(ativo.getTicker())
+                .nome(ativo.getNome())
+                .tipo(ativo.getTipo())
+                .periodo(periodo)
+                .dados(dados)
+                .ultimos7Dias(ultimos7Dias)
+                .build();
+    }
+
+    private String[] mapearPeriodoBrapi(String periodo) {
+        return switch (periodo) {
+            case "7d" -> new String[]{"5d", "1d"};
+            case "1m" -> new String[]{"1mo", "1d"};
+            case "3m" -> new String[]{"3mo", "1d"};
+            case "6m" -> new String[]{"6mo", "1wk"};
+            case "1a" -> new String[]{"1y", "1wk"};
+            case "5a" -> new String[]{"5y", "1mo"};
+            default -> new String[]{"1mo", "1d"};
+        };
+    }
+
+    private int mapearPeriodoCoinGecko(String periodo) {
+        return switch (periodo) {
+            case "7d" -> 7;
+            case "1m" -> 30;
+            case "3m" -> 90;
+            case "6m" -> 180;
+            case "1a" -> 365;
+            case "5a" -> 1825;
+            default -> 30;
+        };
+    }
+
+    private List<DiaResumoDTO> construirResumo7Dias(List<PontoHistoricoDTO> pontos) {
+        if (pontos == null || pontos.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<PontoHistoricoDTO> ultimos = pontos.size() > 7
+                ? pontos.subList(pontos.size() - 7, pontos.size())
+                : pontos;
+
+        List<DiaResumoDTO> resumo = new ArrayList<>();
+        for (int i = 0; i < ultimos.size(); i++) {
+            PontoHistoricoDTO atual = ultimos.get(i);
+            BigDecimal variacao = null;
+            if (i > 0) {
+                BigDecimal anterior = ultimos.get(i - 1).getPreco();
+                if (anterior.compareTo(BigDecimal.ZERO) != 0) {
+                    variacao = atual.getPreco().subtract(anterior)
+                            .divide(anterior, 4, RoundingMode.HALF_UP)
+                            .multiply(BigDecimal.valueOf(100));
+                }
+            }
+            resumo.add(new DiaResumoDTO(atual.getDataHora(), atual.getPreco(), variacao, null));
+        }
+        return resumo;
     }
 
     private TipoAtivo mapearTipoAtivo(BrapiAssetInfoDTO detalhes) {
